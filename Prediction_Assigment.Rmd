@@ -1,0 +1,72 @@
+---
+title: "Prediction Assignment"
+author: "Alfredo Parreño"
+output: html_document
+---
+
+##Summary
+The HAR (Human Activity Recognition) project has collected data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants in the experiment. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. We will try to construct a machine learning algorithm to predict the manner in which they did the exercise from the test data. 
+
+Training data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Testing data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+##Data Cleaning
+Data are loaded from the files available from the links setting the na strings. 
+```{r message=FALSE}
+set.seed(120)
+library(caret)
+library(randomForest)
+trainingData <- read.csv("pml-training.csv", na.strings = c("", "NA", "#DIV/0!"))
+testingData <- read.csv("pml-testing.csv", na.strings = c("", "NA", "#DIV/0!"))
+```
+
+The first clean of the data is performed by removing the variables with all values with NA. Then, there are other variables that are removed as well due to they don´t contribute to the model.
+```{r}
+temp <- trainingData[, colSums(is.na(trainingData)) == 0]
+trainingFiltered <- temp[, !grepl("^X|timestamp|window$", names(temp))]
+temp <- testingData[, colSums(is.na(testingData)) == 0]
+testing <- temp[, !grepl("^X|timestamp|window|problem_id$", names(temp))]
+```
+
+After the data cleaning the variables of the training and test sets are the same, but trainingFiltered also contains the "classe" variable.
+```{r}
+dim(trainingFiltered)
+dim(testing)
+```
+
+##Model
+The trainingFiltered is partitioned 75% for training and 25% for cross validation data.
+```{r}
+inTrain = createDataPartition(trainingFiltered$classe, p=0.75, list=FALSE)
+training = trainingFiltered[ inTrain,]
+validation = trainingFiltered[-inTrain,]
+```
+
+We have decided to use Random Forest algorithm that combines resampling of both data and variables for building the model.
+One of the disadventages of Random Forest is overfitting. Therefore, to overcome this issue we train the data with Random Forest with 4-fold cross-validation control.
+```{r}
+mytrControl = trainControl(method = "cv", number = 4)
+modelFit <- train(training$classe ~.,data = training, method="rf", trControl = mytrControl)
+```
+
+We use the cross validation data to estimate the performance of the model.
+The expected accuracy is:
+```{r}
+pred <- predict(modelFit, validation)
+sum(pred == validation$classe)/nrow(validation)
+```
+
+```{r}
+confusionMatrix(pred, validation$classe)
+```
+From the confusion matrix analysis, the overall accuracy is 99.31% and the out-of-sample error is 0.69%, which tells us the chosen Random Forest algorithm predicts our cross validation data well.
+
+##Prediction of Test data
+Finally, we use our model to predict and estimate the performance of the test data.
+```{r}
+result <- predict(modelFit, testing)
+data.frame(user_name=testing$user_name, preformance=result)
+```
+
+
